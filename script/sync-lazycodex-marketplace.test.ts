@@ -195,36 +195,41 @@ describe("sync-lazycodex-marketplace", () => {
   test("#given legacy Atlas branding #when syncing twice #then README and logos come from the canonical source idempotently", async () => {
     const sourceRoot = await mkdtemp(join(tmpdir(), "omo-sync-branding-source-"))
     const lazycodexRoot = await mkdtemp(join(tmpdir(), "omo-sync-branding-lazycodex-"))
-    await writePluginFixture(sourceRoot, { includeLazycodexBranding: true })
-    await writeFile(
-      join(lazycodexRoot, "README.md"),
-      [
-        "# LazyCodex",
-        "",
-        "## ☁️ Atlas Cloud",
-        "",
-        "legacy unmanaged copy",
-        "",
-        "## 👷 Maintainer",
-        "",
-        "Jobdori",
-        "",
-      ].join("\n"),
-    )
+    try {
+      await writePluginFixture(sourceRoot, { includeLazycodexBranding: true })
+      await writeFile(
+        join(lazycodexRoot, "README.md"),
+        [
+          "# LazyCodex",
+          "",
+          "## ☁️ Atlas Cloud",
+          "",
+          "legacy unmanaged copy",
+          "",
+          "## 👷 Maintainer",
+          "",
+          "Jobdori",
+          "",
+        ].join("\n"),
+      )
 
-    await syncLazycodexMarketplace({ sourceRoot, lazycodexRoot })
-    const firstRun = await readFile(join(lazycodexRoot, "README.md"), "utf8")
-    await syncLazycodexMarketplace({ sourceRoot, lazycodexRoot })
-    const secondRun = await readFile(join(lazycodexRoot, "README.md"), "utf8")
+      await syncLazycodexMarketplace({ sourceRoot, lazycodexRoot })
+      const firstRun = await readFile(join(lazycodexRoot, "README.md"), "utf8")
+      await syncLazycodexMarketplace({ sourceRoot, lazycodexRoot })
+      const secondRun = await readFile(join(lazycodexRoot, "README.md"), "utf8")
 
-    expect(secondRun).toBe(firstRun)
-    expect(secondRun.match(/<!-- atlas-cloud:start -->/g)).toHaveLength(1)
-    expect(secondRun.match(/## ☁️ Atlas Cloud/g)).toHaveLength(1)
-    expect(secondRun).toContain("Use `ATLASCLOUD_API_KEY` and `model_provider=atlascloud`.")
-    expect(secondRun).not.toContain("legacy unmanaged copy")
-    expect(secondRun).toContain("## 👷 Maintainer\n\nJobdori")
-    expect(await readFile(join(lazycodexRoot, ".github", "assets", "atlas-cloud-logo.svg"), "utf8")).toBe("<svg>light</svg>\n")
-    expect(await readFile(join(lazycodexRoot, ".github", "assets", "atlas-cloud-logo-white.svg"), "utf8")).toBe("<svg>dark</svg>\n")
+      expect(secondRun).toBe(firstRun)
+      expect(secondRun.match(/<!-- atlas-cloud:start -->/g)).toHaveLength(1)
+      expect(secondRun.match(/## ☁️ Atlas Cloud/g)).toHaveLength(1)
+      expect(secondRun).toContain("Use `ATLASCLOUD_API_KEY` and `model_provider=atlascloud`.")
+      expect(secondRun).not.toContain("legacy unmanaged copy")
+      expect(secondRun).toContain("## 👷 Maintainer\n\nJobdori")
+      expect(await readFile(join(lazycodexRoot, ".github", "assets", "atlas-cloud-logo.svg"), "utf8")).toBe("<svg>light</svg>\n")
+      expect(await readFile(join(lazycodexRoot, ".github", "assets", "atlas-cloud-logo-white.svg"), "utf8")).toBe("<svg>dark</svg>\n")
+    } finally {
+      await rm(sourceRoot, { recursive: true, force: true })
+      await rm(lazycodexRoot, { recursive: true, force: true })
+    }
   })
 
   test("#given marketplace sync #when copying plugin bundle #then emits self-contained mcp paths", async () => {

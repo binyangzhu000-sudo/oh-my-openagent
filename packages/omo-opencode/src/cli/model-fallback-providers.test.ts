@@ -37,15 +37,17 @@ describe("generateModelConfig provider routes", () => {
 
       expect(result.agents?.sisyphus?.model).toBe("atlascloud/moonshotai/kimi-k3")
       expect(result.agents?.hephaestus?.model).toBe("atlascloud/openai/gpt-5.6-sol")
-      expect(result.agents?.explore?.model).toBe("atlascloud/deepseek-ai/deepseek-v4-flash")
-      expect(result.categories?.quick?.model).toBe("atlascloud/deepseek-ai/deepseek-v4-flash")
+      expect(result.agents?.explore?.model).toBe("atlascloud/qwen/qwen3.7-plus")
+      expect(result.categories?.quick?.model).toBe("atlascloud/minimaxai/minimax-m3")
     })
 
     test("keeps Atlas Cloud eligible without restoring retired Vercel fallback lanes", () => {
       const result = generateModelConfig(createConfig({ hasAtlasCloud: true, hasVercelAiGateway: true }))
 
       expect(result.agents?.hephaestus?.model).toBe("atlascloud/openai/gpt-5.6-sol")
-      const providers = CLI_AGENT_MODEL_REQUIREMENTS.hephaestus.fallbackChain[0]?.providers ?? []
+      const providers = CLI_AGENT_MODEL_REQUIREMENTS.hephaestus.fallbackChain.find(
+        (entry) => entry.model === "gpt-5.6-sol",
+      )?.providers ?? []
       expect(providers).toContain("atlascloud")
       expect(providers).not.toContain("vercel")
     })
@@ -59,22 +61,36 @@ describe("generateModelConfig provider routes", () => {
       // when the generated model config is resolved
       const result = generateModelConfig(config)
 
-      // then Hephaestus uses the native Sol route
-      expect(result.agents?.hephaestus?.model).toBe("openai/gpt-5.6-sol")
-      expect(result.agents?.hephaestus?.variant).toBe("medium")
+      // then Hephaestus uses the native Sol route and keeps its predecessor as fallback
+      expect(result.agents?.hephaestus).toEqual({
+        model: "openai/gpt-6-sol",
+        variant: "medium",
+        fallback_models: [
+          {
+            model: "openai/gpt-5.6-sol",
+            variant: "medium",
+          },
+        ],
+      })
     })
 
-    test("Hephaestus uses its merged Copilot GPT-5.6 Sol medium rung", () => {
+    test("Hephaestus uses its merged Copilot GPT-6 Sol medium rung", () => {
       // given only GitHub Copilot is available
       const config = createConfig({ hasCopilot: true })
 
       // when the generated model config is resolved
       const result = generateModelConfig(config)
 
-      // then Hephaestus uses the supported Copilot effort
+      // then Hephaestus uses the supported Copilot effort and keeps its predecessor as fallback
       expect(result.agents?.hephaestus).toEqual({
-        model: "github-copilot/gpt-5.6-sol",
+        model: "github-copilot/gpt-6-sol",
         variant: "medium",
+        fallback_models: [
+          {
+            model: "github-copilot/gpt-5.6-sol",
+            variant: "medium",
+          },
+        ],
       })
     })
 
@@ -86,7 +102,7 @@ describe("generateModelConfig provider routes", () => {
       const result = generateModelConfig(config)
 
       // then Hephaestus uses the OpenCode Sol route
-      expect(result.agents?.hephaestus?.model).toBe("opencode/gpt-5.6-sol")
+      expect(result.agents?.hephaestus?.model).toBe("opencode/gpt-6-sol")
       expect(result.agents?.hephaestus?.variant).toBe("medium")
     })
 
@@ -125,7 +141,7 @@ describe("generateModelConfig provider routes", () => {
   })
 
   describe("librarian agent special cases", () => {
-    test("librarian uses Claude fallback when ZAI is available with Claude", () => {
+    test("librarian uses Haiku 5.5 medium when ZAI is available with Claude", () => {
       // given Claude and ZAI are available
       const config = createConfig({ hasClaude: true, hasZaiCodingPlan: true })
 
@@ -133,11 +149,12 @@ describe("generateModelConfig provider routes", () => {
       const result = generateModelConfig(config)
 
       // then Librarian uses the current Claude fallback
-      expect(result.agents?.librarian?.model).toBe("anthropic/claude-haiku-4-5")
+      expect(result.agents?.librarian?.model).toBe("anthropic/claude-haiku-5-5")
+      expect(result.agents?.librarian?.variant).toBe("medium")
       expect(JSON.stringify(result)).not.toContain("zai-coding-plan/glm-4.7")
     })
 
-    test("librarian uses Claude fallback when Claude is available", () => {
+    test("librarian uses Haiku 5.5 medium when Claude is available", () => {
       // given only Claude is available
       const config = createConfig({ hasClaude: true })
 
@@ -145,7 +162,8 @@ describe("generateModelConfig provider routes", () => {
       const result = generateModelConfig(config)
 
       // then Librarian uses the shared Claude fallback
-      expect(result.agents?.librarian?.model).toBe("anthropic/claude-haiku-4-5")
+      expect(result.agents?.librarian?.model).toBe("anthropic/claude-haiku-5-5")
+      expect(result.agents?.librarian?.variant).toBe("medium")
     })
   })
 
@@ -158,7 +176,7 @@ describe("generateModelConfig provider routes", () => {
       const result = generateModelConfig(config)
 
       // then Explore includes its remaining fallbacks
-      expect(result.agents?.explore?.model).toBe("openai/gpt-5.6-luna-fast")
+      expect(result.agents?.explore?.model).toBe("openai/gpt-6-luna-fast")
       expect(result.agents?.explore?.variant).toBe("low")
       expect(result.agents?.explore?.fallback_models).toBeDefined()
       expect(result.agents?.explore?.fallback_models?.length).toBeGreaterThan(0)
@@ -172,7 +190,8 @@ describe("generateModelConfig provider routes", () => {
       const result = generateModelConfig(config)
 
       // then Explore has no remaining fallback
-      expect(result.agents?.explore?.model).toBe("anthropic/claude-haiku-4-5")
+      expect(result.agents?.explore?.model).toBe("anthropic/claude-haiku-5-5")
+      expect(result.agents?.explore?.variant).toBe("medium")
       expect(result.agents?.explore?.fallback_models).toBeUndefined()
     })
 
@@ -218,7 +237,7 @@ describe("generateModelConfig provider routes", () => {
       const result = generateModelConfig(config)
 
       // then Librarian includes its remaining fallbacks
-      expect(result.agents?.librarian?.model).toBe("openai/gpt-5.6-luna-fast")
+      expect(result.agents?.librarian?.model).toBe("openai/gpt-6-luna-fast")
       expect(result.agents?.librarian?.variant).toBe("low")
       expect(result.agents?.librarian?.fallback_models).toBeDefined()
       expect(result.agents?.librarian?.fallback_models?.length).toBeGreaterThan(0)
@@ -298,7 +317,7 @@ describe("generateModelConfig provider routes", () => {
       const result = generateModelConfig(config)
 
       // then the native provider stays primary
-      expect(result.agents?.sisyphus?.model).toBe("anthropic/claude-opus-5")
+      expect(result.agents?.sisyphus?.model).toBe("anthropic/claude-opus-5-5")
     })
   })
 
@@ -310,9 +329,10 @@ describe("generateModelConfig provider routes", () => {
       // when the generated model config is resolved
       const result = generateModelConfig(config)
 
-      // then utility agents use the global MiniMax provider
-      expect(result.agents?.librarian?.model).toBe("minimax-coding-plan/MiniMax-M3")
-      expect(result.agents?.explore?.model).toBe("minimax-coding-plan/MiniMax-M3")
+      // then the orchestration agents use the global MiniMax provider; explore and librarian
+      // carry no Coding Plan rung, so librarian is omitted and explore takes the ultimate fallback
+      expect(result.agents?.librarian).toBeUndefined()
+      expect(result.agents?.explore?.model).toBe("opencode/gpt-5-nano")
       expect(result.agents?.atlas?.model).toBe("minimax-coding-plan/MiniMax-M3")
       expect(result.agents?.["sisyphus-junior"]?.model).toBe("minimax-coding-plan/MiniMax-M3")
     })
@@ -338,9 +358,10 @@ describe("generateModelConfig provider routes", () => {
       // when the generated model config is resolved
       const result = generateModelConfig(config)
 
-      // then utility agents use the regional MiniMax provider
-      expect(result.agents?.librarian?.model).toBe("minimax-cn-coding-plan/MiniMax-M3")
-      expect(result.agents?.explore?.model).toBe("minimax-cn-coding-plan/MiniMax-M3")
+      // then the orchestration agents use the regional MiniMax provider; explore and librarian
+      // carry no Coding Plan rung, so librarian is omitted and explore takes the ultimate fallback
+      expect(result.agents?.librarian).toBeUndefined()
+      expect(result.agents?.explore?.model).toBe("opencode/gpt-5-nano")
       expect(result.agents?.atlas?.model).toBe("minimax-cn-coding-plan/MiniMax-M3")
       expect(result.agents?.["sisyphus-junior"]?.model).toBe("minimax-cn-coding-plan/MiniMax-M3")
     })
